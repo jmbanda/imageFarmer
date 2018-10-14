@@ -1,0 +1,59 @@
+                                                 /*///////////////////////////////////////////////////////////////////////////////
+Project: iDistance
+URL: http://code.google.com/p/idistance
+Authors: Michael Schuh, Melissa Dale, Tim Wylie
+Copyright: Michael Schuh, Melissa Dale, Tim Wylie
+License: GPL 2
+
+File: idistance.h
+Description: The header file declaring the idistance class
+///////////////////////////////////////////////////////////////////////////////*/
+
+#ifndef _IDISTANCE_SECTIONS_H_
+#define _IDISTANCE_SECTIONS_H_
+
+#include "idistance.h"
+
+
+////////////////////////////////////////////////////
+//an extension class implementing an extension of the idistance method
+////////////////////////////////////////////////////
+class iDistance_Sections: public iDistance
+{
+public:   
+    ~iDistance_Sections();
+    //main method calls
+    vector<int> QueryPoint(double q[]);
+    vector<int> QueryRange(double low_range[], double high_range[]);
+    vector<int> QueryKNN(double q[], int num);
+    vector<int> QuerySphere(double q[], double rad);
+     
+private:
+    //knn helper functions
+    void SearchO(double q[], double r, bool restrict_num);
+    //void SearchInward(btree_mm::iterator node, double ivalue, double q[], int partition_i, bool restrict_num); //left
+    //void SearchOutward(btree_mm::iterator node, double ivalue, double q[], int partition_i, bool restrict_num); //right
+    
+public:
+    //class helper functions
+    void buildIndexValues();
+    void setDataDependentOptions();
+    void buildSections();
+    //setting options???????
+private:
+    //for a given partition, the number of dimension splits
+    int* number_dimension_splits;
+    //for a given partition, the number of sections
+    int* number_sections;
+    //for a given partition, list of dimensions to section on
+    int* partition_section_dimensions;
+    //the dist max for each section
+    double* partition_section_dist_max;
+    //the index of the dist max for each section
+    int* partition_section_dist_max_index;
+    //string telling which sections in the partition to search
+    vector<char> partition_section_string;
+};
+
+#endif //_IDISTANCE_SECTIONS_H_
+

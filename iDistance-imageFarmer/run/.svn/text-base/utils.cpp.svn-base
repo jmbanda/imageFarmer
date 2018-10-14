@@ -1,0 +1,94 @@
+/*///////////////////////////////////////////////////////////////////////////////
+Project: iDistance
+URL: http://code.google.com/p/idistance
+Authors: Michael Schuh, Melissa Dale, Tim Wylie
+Copyright: Michael Schuh, Melissa Dale, Tim Wylie
+License: GPL 2
+
+File: utils.cpp
+Description: misc utils code 
+Compile: g++ utils.cpp helper.h -o utils 
+///////////////////////////////////////////////////////////////////////////////*/
+
+
+#include <iostream>
+#include <sstream>
+#include "string.h"
+#include <vector>
+#include "helper.h"
+
+using namespace std;
+
+//prints the command line arguments to the console
+void dumpArgs(int argc, char* argv[])
+{
+    cout << "argc = " << argc << endl; 
+    for(int i = 0; i < argc; i++)
+    {
+        cout << "argv[" << i << "] = '" << argv[i] << "'" << endl;
+    }
+  
+}
+
+
+
+int extractMedians(char* filename)
+{
+	ostringstream ss;
+    const char* dataFile = filename;
+    cout << "file: " << dataFile << endl;
+    //NOTE: that the data contains the id as the first value in each point
+	int* fileInfo = getFileInfo(dataFile);
+	cout << "  total points = " << fileInfo[0] << endl;
+	cout << "  total dims = " << fileInfo[1]-1 << endl; 
+    
+    double* data = readDataFile(dataFile, fileInfo[0], fileInfo[1]);
+
+    double* medians = findMedians(data, fileInfo[0], fileInfo[1], true);
+    
+    for(int i = 1; i < fileInfo[1]; i++)
+	{
+		ss << medians[i]  << endl;
+	}
+	
+	string baseFileStr = dataFile;
+    baseFileStr = trimToName(baseFileStr);
+    string medianFileStr = baseFileStr + "_" + "medians.txt";
+    const char* medianFile = medianFileStr.c_str();
+                
+	printOut(medianFile, ss.str(), false);
+    
+	return 0;
+}
+
+
+/////////////////////////////////////////////////////////////////////
+//////////  MAIN PROGRAM RUN
+
+int main(int argc, char* argv[])
+{
+   
+    
+    timeval start = startTimer();
+    int retStatus = 1;
+    
+    /////////////////////////////////////////////////////
+    //run whatever utility code you need to here
+   
+    retStatus = extractMedians(argv[1]);
+    
+    
+    ////////////////////////////////////////////////////
+    double runTime = stopTimer(start);
+    runTime = runTime / 1000.0; // in seconds
+    
+    cout << "Program" << 
+      (retStatus == 0 ? 
+        " finished successfully!" : " terminated with errors!") << endl << endl;
+    
+    cout << "Total elapsed time: " << runTime << " seconds." << endl << endl;
+       
+    return 0;
+
+}
+

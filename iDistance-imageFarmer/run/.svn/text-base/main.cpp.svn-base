@@ -1,0 +1,735 @@
+/*///////////////////////////////////////////////////////////////////////////////
+Project: iDistance
+URL: http://code.google.com/p/idistance
+Authors: Michael Schuh, Melissa Dale, Tim Wylie
+Copyright: Michael Schuh, Melissa Dale, Tim Wylie
+License: GPL 2
+
+File: main.cpp
+Description: 
+///////////////////////////////////////////////////////////////////////////////*/
+
+
+#include <iostream>
+#include <sstream>
+#include "string.h"
+
+#include "helper.h"
+#include "idistance.h"
+#include "idistance_global.h"
+
+#define CONSOLE_PRINT true //print files to console as well
+#define SS_CHECK false //use this to verify iDist results
+   // this circumvents normal stat outputs for SS and instead outputs when
+   // there is a mismatch between the results of both methods
+   // DO NOT USE -SS with this check because BOTH results will be SS then!
+
+//#define USE_GLOBAL true // value not important
+	// used to determine which type of idistance is used
+    // comment this out to use normal
+
+//command line args defined
+int num_Args = 7;
+const char* def_Args[] = {"-C", "-SS", "-B", "-L", "-QP", "-QR", "-QN"};
+enum {LOADCONFIG, SEQSEARCH, BUILDTREE, LOADTREE, 
+    QUERYPOINT, QUERYRANGE, QUERYKNN};
+
+using namespace std;
+
+//print the correct program arguments to the console
+void failedArgs()
+{
+    cout<<endl;
+    cout<<"Error loading program arguments. Correct format is:"<<endl;
+    cout<<"./iDist {-C \"configfile\"} {-SS}"<<endl; 
+    cout<<"  {-B \"datasetfile\" | -L \"treefile\"}"<<endl; 
+    cout<<"  {-QP \"qfile\" | -QR \"qfile\" | -QN \"qfile\" kval}"<<endl;
+    cout<<endl;
+    cout<<"See readme.txt for more information."<<endl;
+    cout<<endl;
+}
+
+//prints the command line arguments to the console
+void dumpArgs(int argc, char* argv[])
+{
+    cout << "argc = " << argc << endl; 
+    for(int i = 0; i < argc; i++)
+    {
+        cout << "argv[" << i << "] = '" << argv[i] << "'" << endl;
+    }
+  
+}
+
+/*************************************************
+ * Runs through the given command line args and performs
+ * the required functions. Consider this the master function
+ * which dictates what happens. Note that it requires 
+ * the correct order: {config} {tree} {query} args
+ */
+int runArgs(int argc, char* argv[])
+{ 
+    bool treeDone = false; //ensures tree before query
+
+    //declare our iDistance class
+    //uses define to initialize correct version
+    //nothing else should have to change
+    #ifdef USE_GLOBAL
+    	iDistance_Global iDist;
+    #endif
+    
+    #ifndef USE_GLOBAL
+    	iDistance iDist;
+    #endif
+    
+    configOptions settings; //declare our default configuration
+
+    //directory structure assumes you must run from within "run" folder
+    const char* resultsDir = "results/"; //results directory
+    const char* statusFile = "results/status.txt"; //append ALL results output
+    const char* treeStatsFile = "results/stats_trees.txt"; //raw stats of ALL results
+    const char* queryStatsFile = "results/stats_queries.txt"; //raw stats of ALL results
+    const char* queryStatsAggFile = "results/statsAgg_queries.txt"; //raw stats of ALL results
+        
+        
+    int num_points; //in dataset
+    int num_dims; //in dataset, these used by query stats output
+    int argI = 1; //init arg index, 0 = program name
+    int arg = -1; //enum value for arg switch
+    ostringstream ss; //string stream used for buffering up output
+               
+    
+    
+    string argStr;
+    while(argI < argc) //loop over all command line args
+    {
+    
+        //get the command arg enum value
+        argStr = argv[argI];
+        arg = stringToEnum(stringToUpper(argStr.c_str()), def_Args, num_Args);
+      
+        //ensure we got a valid one, and enough remaining args for it
+        if( (arg == -1) ||
+          ((arg == QUERYKNN) && (argc - argI < 2)) ||
+          ((arg != QUERYKNN) && (arg != SEQSEARCH) && (argc - argI < 1)) )
+        {
+            failedArgs();
+            return 1;
+        }
+        
+        //if query arg, make sure tree ready
+        if((!treeDone) && 
+            ((arg == QUERYPOINT) || (arg == QUERYRANGE) || (arg == QUERYKNN)))
+        {
+            cout << "No Tree has been established yet!" << endl;
+            failedArgs();
+            return 1;
+        }
+        
+        switch(arg)
+        {
+        ////////////////////////////////////////////////////////////////
+            case LOADCONFIG:
+            {
+                argI++; //inc and get next arg
+                const char* argCFile = argv[argI];
+                ss << "Loading config file: '" << argCFile << endl;
+            
+                //load config file and get settings
+                int configLoad = readConfigFile(argCFile, &settings);
+                if(configLoad == 0)
+                {
+                    outputConfigOptions(&settings, ss);
+                    ss << endl;
+                    
+                    if(settings.refs_build == FROM_FILE)
+                    {
+                    	//instead, lets read the very next command arg for the filename
+                    	argI++;
+                    	const char* argRefFile = argv[argI];
+                    	
+                    	ss << "  Loading reference points from file: " << argRefFile << endl;
+                        int* refFileInfo = getFileInfo(argRefFile);
+                        
+                        double* data = readDataFile(argRefFile, refFileInfo[0], refFileInfo[1]);
+                        
+                        if(data != NULL)
+                        {
+                            iDist.setReferencePoints(data, refFileInfo[0]);
+                        }
+                        else
+                        {
+                        	cout << "Error loading ref file!" << endl;
+                        	return 1;
+//                            ss << "  Error loading ref point file, falling back to defaults." << endl;
+//                            settings.refs_build = HALF_POINTS;
+                        }
+                    	
+                    }
+                    
+                    
+                    if(settings.refs_assign == ASSIGN_FILE)
+                    {
+                    	argI++;
+                    	const char* argAssignFile = argv[argI];
+                    	
+                    	ss << "  Loading point assignments from file: " << argAssignFile << endl;
+                        int* assignFileInfo = getFileInfo(argAssignFile);
+                        
+                        double* data = readDataFile(argAssignFile, assignFileInfo[0], assignFileInfo[1]);
+                        
+                        if(data != NULL)
+                        {
+                            iDist.setPointAssignment(data, assignFileInfo[0]);
+                        }
+                        else
+                        {
+                        	cout << "Error loading assign file!" << endl;
+                        	return 1;
+//                            ss << "  Error loading ref point file, falling back to defaults." << endl;
+//                            settings.refs_build = HALF_POINTS;
+                        }
+                    	
+                    }
+                    
+                    
+                    
+                    if(settings.algo_version == EXT1 && 
+                    	settings.splits_build == SPLIT_FILE)
+                    {
+                    	//instead, lets read the very next command arg for the filename
+                    	argI++;
+                    	const char* argSplitFile = argv[argI];
+                    	
+                    	ss << "  Loading medians from file: " << argSplitFile << endl;
+                        int* splitFileInfo = getFileInfo(argSplitFile);
+                        
+                        double* data = readDataFile(argSplitFile, splitFileInfo[0], splitFileInfo[1]);
+                        
+                        if(data != NULL)
+                        {
+                            iDist.setSplitPoints(data, splitFileInfo[1]);
+                        }
+                        else
+                        {
+                        	cout << "Error loading splits file!" << endl;
+                        	return 1;
+                            //ss << "  Error loading splits point file, falling back to defaults." << endl;
+                            //settings.splits_build = TOP_CENTERS;
+                        }
+                        
+                    	/*
+                    	ss << "  Loading medians from file: " << settings.splits_file << endl;
+                        int* splitFileInfo = getFileInfo(settings.splits_file);
+                        
+                        double* data = readDataFile(settings.splits_file, splitFileInfo[0], splitFileInfo[1]);
+                        
+                        if(data != NULL)
+                        {
+                            iDist.setSplitPoints(data, splitFileInfo[1]);
+                        }
+                        else
+                        {
+                            ss << "  Error loading splits point file, falling back to defaults." << endl;
+                            settings.splits_build = TOP_CENTERS;
+                        }
+                        
+                        */
+                    	
+                    }
+                    
+                    
+                    iDist.setOptions(settings);
+                }
+                else
+                {
+                    ss << "  Error in configuration file, using defaults." << endl;
+                }
+                ss << endl;
+                
+            }
+            break;
+        ////////////////////////////////////////////////////////////////
+            case BUILDTREE: 
+            {
+                argI++; //inc and get next arg
+                const char* argTFile = argv[argI];
+     
+                ss << "Building index on: '" << argTFile << "'" << endl;
+                
+                //NOTE: that the data contains the id as the first value in each point
+                int* fileInfo = getFileInfo(argTFile);
+                ss << "  total points = " << fileInfo[0] << endl;
+                ss << "  total dims = " << fileInfo[1]-1 << endl; 
+                
+                num_points = fileInfo[0];
+                num_dims = fileInfo[1]-1;
+                
+                double* data = readDataFile(argTFile, fileInfo[0], fileInfo[1]);
+
+                if(data == NULL) //error loading data
+                {
+                    cout << "  Error loading data!" << endl;
+                    return 1;
+                }
+                
+                //load data into iDistance (and data IDs)
+                iDist.setDataWithIDs(data, fileInfo[0], fileInfo[1]-1);
+                
+                iDist.initOptions(); //after data loaded
+                
+                timeval timer = startTimer(); //start timer
+                iDist.buildIndexValues();
+                double calcTime = stopTimer(timer); //time taken to calculate iDist values
+        
+                iDist.buildTree();
+                double indexTime = stopTimer(timer); //calcTime + time to load B+ tree
+                
+                double buildTime = (indexTime - calcTime); //just the time taken to load B+ tree
+               
+                 ss << "  Index built from data file!" << endl;
+                
+                //get the base file name for printing out all new files
+                //this strips the extension and all folder structures
+                string baseFileStr = argTFile;
+                baseFileStr = trimToName(baseFileStr);
+                string resultsFileStr = resultsDir + baseFileStr;
+                const char* baseFile = baseFileStr.c_str();
+                const char* resultsFile = resultsFileStr.c_str();
+                
+                iDist.setTreeStatTimes(buildTime, indexTime);
+                //print out tree build stats as .results file
+                iDist.PrintTreeStats(resultsFile);
+                iDist.PrintTreeStats(ss);
+                
+                ostringstream stats;
+                iDist.PrintTreeStats_RAW(stats, baseFile, fileInfo[0], fileInfo[1]-1);
+                
+              
+                //print out tree segments as .segments file
+                iDist.PrintNodeRange(resultsFile);
+                //iDist.PrintNodeRange(cout);
+                
+                //save the build as .tree and .data files
+                iDist.saveTree(resultsFile);
+                
+                //stats treeStats;
+                //iDist.getStats(&treeStats);
+                //printTreeStats(&treeStats, argTFile, true);
+                
+                ss << endl;
+                //printOut(statusFile, ss.str(), CONSOLE_PRINT);
+                printOut(treeStatsFile, stats.str(), false);
+                treeDone = true;
+          
+                delete [] data;
+                delete [] fileInfo;
+            }
+            break;
+        ////////////////////////////////////////////////////////////////
+            case LOADTREE:
+            {
+                argI++; //inc and get next arg
+                const char * argTFile = argv[argI];  
+                ss << "Loading index from: '" << argTFile << "'" << endl;
+                
+                iDist.loadTree(argTFile);
+                
+                num_points = iDist.getNumberOfPoints();
+                num_dims = iDist.getNumberOfDimensions();
+                
+                ss << "  Index and data files loaded!" << endl;
+                ss << endl;
+                //printOut(statusFile, ss.str(), CONSOLE_PRINT);
+                treeDone = true;
+                
+            }
+            break;
+        ////////////////////////////////////////////////////////////////
+            case SEQSEARCH:
+            {
+                //set the sequential search flag in iDistance class
+                
+                iDist.setSequentialSearch(1);
+                ss << "\n---- Performing Sequential Scan ----\n" << endl;
+                
+
+            }
+            break;
+        ////////////////////////////////////////////////////////////////
+            case QUERYPOINT:
+            {
+                argI++; //inc and get next arg
+                const char * argQFile = argv[argI];
+                ss << "Loading query point(s) from: '" << argQFile << "'" << endl;
+                
+                string baseFileStr = argQFile;
+                baseFileStr = trimToName(baseFileStr);
+                string resultsFileStr = resultsDir + baseFileStr + ".results";
+                const char* baseFile = baseFileStr.c_str();
+                const char* resultsFile = resultsFileStr.c_str();
+                
+                int* fileInfo = getFileInfo(argQFile);
+                double* data = readDataFile(argQFile, fileInfo[0], fileInfo[1]);
+                
+                if(data == NULL)
+                {
+                    cout << "  Error loading query file!" << endl;
+                    return 1;
+                }
+                
+                ostringstream stats;
+                ostringstream statsAgg;
+                double stat_nodes = 0;
+                double stat_candidates = 0;
+                double stat_time = 0;
+
+                for(int i = 0; i < fileInfo[0]; i++)
+                {
+                    ss << "  Query Point " << i << " (ID "<< data[i*fileInfo[1]] << ")" << endl;
+                    //printOut(statusFile, ss.str(), CONSOLE_PRINT);
+                    //printOut(resultsFile, ss.str(), false);
+                    //ss.str("");
+                    
+                    iDist.resetNodeCount(); //reset node count
+                    timeval qtimer = startTimer(); //start timer 
+                    
+                   
+                    vector<int> results_ind = iDist.QueryPoint(&data[i*fileInfo[1]+1]); //move to start of data
+                    
+                    double queryT = stopTimer(qtimer); //return elapsed time as a double	
+                    
+                    vector<double> qstats;
+                    
+                    int numNodes = iDist.getNodeCount();  //get node count
+                    int numCandidates = iDist.getCandidateCount(); 
+                    vector<int> results = iDist.getIDs(results_ind); //get real IDs
+                    
+                    qstats.push_back(numNodes);
+                    qstats.push_back(numCandidates);
+                    qstats.push_back(queryT);
+                    
+                    stat_nodes = stat_nodes + numNodes;
+                    stat_candidates = stat_candidates + numCandidates;
+                    stat_time = stat_time + queryT;
+                    
+                    
+                    if(SS_CHECK)
+                    {
+                        iDist.setSequentialSearch(1);
+                        vector<int> results_ind_ss = iDist.QueryPoint(&data[i*fileInfo[1]+1]); //move to start of data
+                        iDist.setSequentialSearch(0);
+                        
+                        vector<int> results_ss = iDist.getIDs(results_ind_ss);
+                        
+                        for(int i = 0; i < results_ss.size(); i++)
+                        {
+                            if (results_ss[i] != results[i])
+                            {
+                                ss << "  MISMATCH!\n\nSS:\n";
+                                printQueryResults(ss, results_ss, -1, -1);
+                                i = results_ss.size();
+                                ss << "iDist:\n";
+                            }
+                                
+                        }
+                    
+                    }
+
+                    printQueryResults(ss, results, numNodes, queryT);
+                    printQueryResults_RAW(stats, baseFile, num_dims, num_points, def_Args[QUERYPOINT], qstats);
+                    
+                } 
+             
+                ss << endl;
+                
+                vector<double> qstats;
+                qstats.push_back( stat_nodes / fileInfo[0] );
+                qstats.push_back( stat_candidates / fileInfo[0] );
+                qstats.push_back( stat_time / fileInfo[0] );
+                
+                printQueryResults_RAW(statsAgg, baseFile, num_dims, num_points, def_Args[QUERYPOINT], qstats);
+
+                //printOut(statusFile, ss.str(), CONSOLE_PRINT);
+                printOut(resultsFile, ss.str(), false);
+                printOut(queryStatsFile, stats.str(), false);    
+                printOut(queryStatsAggFile, statsAgg.str() , false);    
+
+
+                delete [] data;
+                delete [] fileInfo;
+            }
+            break;
+        ////////////////////////////////////////////////////////////////
+            case QUERYRANGE:
+            {
+                argI++; //inc and get next arg
+                const char * argQFile = argv[argI];
+                ss << "Loading query range(s) from: '" << argQFile << "'" << endl;
+
+                string baseFileStr = argQFile;
+                baseFileStr = trimToName(baseFileStr);
+                string resultsFileStr = resultsDir + baseFileStr + ".results";
+                const char* baseFile = baseFileStr.c_str();
+                const char* resultsFile = resultsFileStr.c_str();
+                
+                int* fileInfo = getFileInfo(argQFile);
+                double* data = readDataFile(argQFile, fileInfo[0], fileInfo[1]);
+                
+                if(data == NULL)
+                {
+                    cout << "  Error loading query file!" << endl;
+                    return 1;
+                }
+            
+                ostringstream stats;
+                int range = 1;
+                for(int i = 0; i < fileInfo[0]; i=i+2) //increment two lines at a time
+                {
+
+                    ss << "  Range Query " << range << endl;
+                    //printOut(statusFile, ss.str(), CONSOLE_PRINT);
+                    //printOut(resultsFile, ss.str(), false);
+                    //ss.str(""); //clear string
+                
+                    
+                    iDist.resetNodeCount();
+                    timeval qtimer = startTimer(); 
+                    
+                    vector<int> results_ind = iDist.QueryRange(&data[i*fileInfo[1]], &data[(i+1)*fileInfo[1]]); //move to start of data
+                    
+                    double queryT = stopTimer(qtimer); 
+                    
+                    vector<double> qstats;
+                    
+                    int numNodes = iDist.getNodeCount();
+                    int numCandidates = iDist.getCandidateCount(); 
+                    vector<int> numCandidates2 = iDist.getKNN_candidates(); 
+                    double* cstats = new double[3];
+                    quickStats(numCandidates2, cstats);
+                    
+                    vector<int> results = iDist.getIDs(results_ind);
+                    
+                    qstats.push_back(numNodes);
+                    qstats.push_back(cstats[1]);
+                    qstats.push_back(numCandidates);
+                    qstats.push_back(queryT);
+                    
+                    //cout << "HERE: " << results.size() << " : " << numNodes << endl;
+                    
+                    if(SS_CHECK)
+                    {
+                        iDist.setSequentialSearch(1);
+                        vector<int> results_ind_ss = iDist.QueryRange(&data[i*fileInfo[1]], &data[(i+1)*fileInfo[1]]); //move to start of data
+                        iDist.setSequentialSearch(0);
+                        
+                        vector<int> results_ss = iDist.getIDs(results_ind_ss);
+                        
+                        for(int i = 0; i < results_ss.size(); i++)
+                        {
+                            if (results_ss[i] != results[i])
+                            {
+                                ss << "  MISMATCH!\nSS:\n";
+                                printQueryResults(ss, results_ss, -1, -1);
+                                i = results_ss.size();
+                                ss << "iDist:\n";
+                            }
+                                    
+                                
+                        }
+                    
+                    }
+                    
+                    printQueryResults(ss, results, numNodes, queryT);
+                    printQueryResults_RAW(stats, baseFile, num_dims, num_points, def_Args[QUERYRANGE], qstats);
+                    
+                    range++;
+                }
+
+                ss << endl;
+                //printOut(statusFile, ss.str(), CONSOLE_PRINT);
+                printOut(resultsFile, ss.str(), false);
+                printOut(queryStatsFile, stats.str(), false);  
+                
+                delete [] data;
+                delete [] fileInfo;
+            }
+            break;
+        ////////////////////////////////////////////////////////////////
+            case QUERYKNN:
+            {
+                argI++; //inc and get next arg
+                const char * argQFile = argv[argI];
+                argI++; //inc and get next arg again
+                int k = atoi(argv[argI]);           
+                
+                ss << "Loading knn query point(s) from: '" << argQFile << "'" << endl;
+                ss << "  searching for " << k << " neighbors.\n" << endl;
+                
+                
+                string baseFileStr = argQFile;
+                baseFileStr = trimToName(baseFileStr);
+                string resultsFileStr = resultsDir + baseFileStr + "_" + argv[argI] + ".results";
+                const char* baseFile = baseFileStr.c_str();
+                const char* resultsFile = resultsFileStr.c_str();
+                
+                int* fileInfo = getFileInfo(argQFile);
+                double* data = readDataFile(argQFile, fileInfo[0], fileInfo[1]);
+                
+                if(data == NULL)
+                {
+                    cout << "  Error loading query file!" << endl;
+                    return 1;
+                }
+
+                ostringstream stats;
+                for(int i = 0; i < fileInfo[0]; i++)
+                {
+                    ss << "  KNN Query " << i << " (ID " << data[i*fileInfo[1]] << ")" << endl;
+                    //printOut(statusFile, ss.str(), CONSOLE_PRINT);
+                    //printOut(resultsFile, ss.str(), false);
+                    //ss.str("");
+                
+                    timeval qtimer = startTimer(); //start timer
+                    vector<int> results_ind = iDist.QueryKNN(&data[i*fileInfo[1]+1], k); //move to start of data
+                    double queryT = stopTimer(qtimer); //return elapsed time as a double
+                    
+                    vector<int> results = iDist.getIDs(results_ind);
+
+                    vector<double> dists = iDist.getKNN_dists();
+                    vector<int> numNodes = iDist.getKNN_nodes();
+                    vector<int> numCandidates = iDist.getKNN_candidates();
+                    double avgDist = iDist.getKNN_avgDist();
+                    if(SS_CHECK)
+                    {
+                        iDist.setSequentialSearch(1);
+                        vector<int> results_ind_ss = iDist.QueryKNN(&data[i*fileInfo[1]+1], k); //move to start of data
+                        iDist.setSequentialSearch(0);
+                        
+                        vector<int> results_ss = iDist.getIDs(results_ind_ss);
+                        
+                        for(int i = 0; i < results_ss.size(); i++)
+                        {
+                            if (results_ss[i] != results[i])
+                            {                      
+                                ss << "  MISMATCH!\nSS:\n";
+                                printQueryResults(ss, results_ss, -1, -1);
+                                i = results_ss.size();
+                                ss << "iDist:\n";
+                            }     
+                                
+                        }
+                    
+                    }
+                    
+                    printKNNQueryResults(ss, results, dists, numNodes, avgDist, queryT);
+                    printKNNQueryResults_RAW(stats, baseFile, num_dims, num_points, def_Args[QUERYKNN], dists, numNodes, numCandidates, queryT, k);
+                       
+                }
+            
+                ss << endl;
+                //printOut(statusFile, ss.str(), CONSOLE_PRINT);
+                printOut(resultsFile, ss.str(), false);
+                printOut(queryStatsFile, stats.str(), false);
+                    
+                delete [] data;
+                delete [] fileInfo;
+            }
+            break; 
+         
+        } //end switch statement on args
+    
+       
+        printOut(statusFile, ss.str(), CONSOLE_PRINT);
+        ss.str("");
+              
+        argI++; //increment arg pointer, and print separation in status file
+        printOut(statusFile, 
+            "\n----------------------------------------\n\n", false);
+    
+    } //end while loop on command args
+  
+    return 0;
+}
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+/////////////////////////////////////////////////////////////////////
+//////////  MAIN PROGRAM RUN
+
+int main(int argc, char* argv[])
+{
+    ////////////////////////////////
+    //Testing area -- simply circumvent rest of program
+    /////////////////////////////////
+    
+    
+    // ./extractMedians utility code
+    // inputs a data filename, outputs a median file
+    
+    /*
+    ostringstream ss;
+    const char* dataFile = argv[1]; //first and only arg
+    cout << "file: " << dataFile << endl;
+    //NOTE: that the data contains the id as the first value in each point
+	int* fileInfo = getFileInfo(dataFile);
+	cout << "  total points = " << fileInfo[0] << endl;
+	cout << "  total dims = " << fileInfo[1]-1 << endl; 
+    
+    double* data = readDataFile(dataFile, fileInfo[0], fileInfo[1]);
+
+    double* medians = findMedians(data, fileInfo[0], fileInfo[1], true);
+    
+    for(int i = 1; i < fileInfo[1]; i++)
+	{
+		ss << medians[i]  << endl;
+	}
+	
+	string baseFileStr = dataFile;
+    baseFileStr = trimToName(baseFileStr);
+    string medianFileStr = baseFileStr + "_" + "medians.txt";
+    const char* medianFile = medianFileStr.c_str();
+                
+	printOut(medianFile, ss.str(), false);
+    
+	return 0;
+	
+	*/
+    ///////////////////////////////////
+    // END TESTING AREA
+    ///////////////////////////////
+  
+    if(argc <= 2) //has to be at least three args (prog name first)
+    {
+        failedArgs();
+        return 1;
+    }
+    
+    timeval start = startTimer();
+    int retStatus = runArgs(argc, argv);
+    double runTime = stopTimer(start);
+    runTime = runTime / 1000.0; // in seconds
+    
+    cout << "Program" << 
+      (retStatus == 0 ? 
+        " finished successfully!" : " terminated with errors!") << endl << endl;
+    
+    cout << "Total elapsed time: " << runTime << " seconds." << endl << endl;
+       
+    return 0;
+
+}
+

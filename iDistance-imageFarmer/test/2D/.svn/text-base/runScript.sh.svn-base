@@ -1,0 +1,4 @@
+./iDist -C ../test/2D/test.conf -B ../test/2D/test_2_10.txt -QP ../test/2D/test_2_10.txt
+./iDist -C ../test/2D/test2.conf ../test/2D/test_2_10_refs.txt ../test/2D/test_2_10_assigns.txt -B ../test/2D/test_2_10.txt -QN ../test/2D/test_2_10_qn.txt 3
+
+

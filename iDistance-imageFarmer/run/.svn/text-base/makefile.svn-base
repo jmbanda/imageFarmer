@@ -1,0 +1,21 @@
+iDist : main.o idistance.o idistance_global.o helper.o
+	g++ -Wall main.o helper.o idistance.o idistance_global.o -o iDist
+
+main.o: main.cpp helper.h idistance.h 
+	g++ -c main.cpp
+
+helper.o: helper.cpp helper.h
+	g++ -c helper.cpp
+
+idistance_global.o: idistance_global.cpp idistance_global.h idistance.o
+	g++ -c idistance_global.cpp
+
+idistance.o: idistance.cpp idistance.h definitions.h
+	g++ -c idistance.cpp
+
+clean:
+	\rm *.o *~ iDist
+
+tar:
+	tar cfv idistance.tar main.cpp helper.h helper.cpp idistance.h idistance.cpp idistance_global.h idistance_global.cpp definitions.h makefile readme.txt
+

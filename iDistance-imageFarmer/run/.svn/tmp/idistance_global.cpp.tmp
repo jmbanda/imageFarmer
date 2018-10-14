@@ -1,0 +1,585 @@
+/*///////////////////////////////////////////////////////////////////////////////
+Project: iDistance
+URL: http://code.google.com/p/idistance
+Authors: Michael Schuh, Melissa Dale, Tim Wylie
+Copyright: Michael Schuh, Melissa Dale, Tim Wylie
+License: GPL 2
+
+File: idistance.cpp
+Description: This file implements the idistance class functions declared
+in idistance.h
+///////////////////////////////////////////////////////////////////////////////*/
+
+#include <iostream>
+#include <fstream>
+#include <sys/time.h>
+#include "string.h"
+#include <math.h>
+#include <numeric>
+
+#include "idistance_global.h"
+
+iDistance_Global::iDistance_Global()
+{
+    dimension_splits = NULL;
+    dimension_split_value = NULL;
+    partition_section_dist_max = NULL;
+    partition_section_dist_max_index = NULL;
+}
+
+
+iDistance_Global::~iDistance_Global()
+{
+    if(dimension_splits != NULL)
+    {
+        delete [] dimension_splits;
+        dimension_splits = NULL;
+    }
+    if(dimension_split_value != NULL)
+    {
+        delete [] dimension_split_value;
+        dimension_split_value = NULL;
+    }
+    if(partition_section_dist_max != NULL)
+    {
+        delete [] partition_section_dist_max;
+        partition_section_dist_max = NULL;
+    }
+    if(partition_section_dist_max_index != NULL)
+    {
+        delete [] partition_section_dist_max_index;
+        partition_section_dist_max_index = NULL;
+    }
+    //~iDistance();
+}
+
+//shortcut so that we're consistent with the equations 
+double iDistance_Global::GetEquation(int partition, int split, double dist)
+{
+    double equation = roundOff((constant_c*partition) + (double)split*(constant_c/number_sections) + dist);
+    return equation;    
+}
+
+//get the characteristic equation given a query and radius
+vector<char> iDistance_Global::GetSplitsEquation(double q[], double rad)
+{
+    vector<char> char_equations;
+    //this could be sped up ,maybe
+    for(int i=0;i<number_dimension_splits;i++)
+    {
+        //equal on the lesser side!
+        if(q[dimension_splits[i]]+rad > dimension_split_value[i])
+        {
+            if(q[dimension_splits[i]]-rad <= dimension_split_value[i])
+            {
+                //on the left side
+                char_equations.push_back('*');
+            }
+            else
+            {
+                char_equations.push_back('1');
+            }
+        }
+        else if(q[dimension_splits[i]]-rad <= dimension_split_value[i])
+        {
+            char_equations.push_back('0');
+        }
+    }
+    
+    return char_equations;    
+}
+
+//get the actual computed list of int values representing the subpartitions to search
+//will we overflow max int?????????????????????
+//should be unsigned?
+vector<unsigned int> iDistance_Global::GetSplitsList(vector<char> char_eqs)
+{
+    vector<unsigned int> vals;
+    vals.push_back(0); //initial value
+    
+    for(int i=0; i < char_eqs.size(); i++)
+    {
+        if(i>0)
+        {
+            //bitshift each value in array
+            for(int j=0; j < vals.size(); j++)
+            {
+                vals[j] = vals[j] << 1;    
+            }
+        }
+        
+        if(char_eqs[i] == '0')
+        {
+            //just have to add 0
+        }
+        else if(char_eqs[i] == '1')
+        {
+            for(int j=0; j < vals.size(); j++)
+            {
+                vals[j]++;    
+            }    
+        }
+        else if(char_eqs[i] == '*')
+        {
+            //double everything and add 1 to half of them
+            int temp_length = vals.size();
+            for(int j=0; j < temp_length; j++)
+            {
+                vals.push_back(vals[j]);
+                vals[j]++;
+            }    
+        }    
+    }
+    return vals;
+}
+//*******************************************************************//
+//Returns a vector of indices of all the points matching q
+//*******************************************************************//
+vector<int> iDistance_Global::QueryPoint(double q[])
+{
+ 
+    //cout<<"FindOne"<<endl;
+    vector<int> results;
+    btree_mm::iterator bi;
+    double ref_dist;
+    double y;
+    //cout<<"#Partitions= "<<number_partitions;
+    //find which partition(s) it's in
+    //stx::CountQueryNodes("Start"); //reset query node count
+    
+    
+    vector<char> char_eq = GetSplitsEquation(q,0);
+    /*cout<<"Char EQ: ";
+    for(int t=0;t<char_eq.size();t++)
+    {
+        cout<<char_eq[t];
+    }
+    cout<<endl;*/
+    vector<unsigned int> search_splits = GetSplitsList(char_eq);
+    /*
+    cout<<"Search: ";
+    for(int t=0;t<search_splits.size();t++)
+    {
+        cout<<search_splits[t]<<" ";
+    }
+    cout<<endl;*/
+    
+    //check each partition
+    for(int i=0 ; i < number_partitions ; i++)
+    {
+        //cout<<"Check Partition "<<i;
+        ref_dist = dist(q,&reference_points[i*number_dimensions]);
+        //if the point is within partition range
+        if(ref_dist <= partition_dist_max[i]) //querydist = r = 0
+        {
+            //check each subpartition (split)
+            for(int split=0; split < search_splits.size(); split++)
+            {
+                //y = roundOff(i*constant_c + ref_dist);
+                //get the equation for partition/split
+                y = GetEquation(i, search_splits[split], ref_dist);
+                bi = btree.find( y ); 
+                while(bi.key() == y) //for every match of y
+                {
+                    if(dist(&datapoints[bi.data()*number_dimensions],q) == 0.0)
+                    {
+                        results.push_back(bi.data());
+                    }
+                    bi++;
+                }
+            }
+        }
+    }
+    return results;
+}
+
+//*******************************************************************//
+// naive range
+//*******************************************************************//
+vector<int> iDistance_Global::QueryRange(double low_range[], double high_range[])
+{
+    //***NAIVE RANGE***//
+    //set radius of search sphere
+    double r = dist(low_range, high_range)/2.0;
+    //cout<<"Range R: "<<r<<endl;
+    //allocate array for center pt
+    double* center_pt = new double[number_dimensions];
+    //calculate center pt
+    for(int dim=0; dim < number_dimensions; dim++)
+    {
+        center_pt[dim] = (high_range[dim] + low_range[dim])/2.0;
+    }
+    
+    //do standard KNN search
+    vector<int> possible_pts = QuerySphere(center_pt, r);
+    
+    //weed out bad results
+    int index;
+    for(int point = possible_pts.size()-1; point >= 0; point--)
+    {
+        //cout<<"ID: "<<datapoint_ids[possible_pts[point]]<<endl;
+        //for a point at index, check each dimension
+        index = possible_pts[point] * number_dimensions;
+        for(int dim=0; dim < number_dimensions; dim++)
+        {
+            //cout<<datapoints[index + dim]<<endl;
+            //if not in range
+            if(datapoints[index + dim] < low_range[dim] 
+                || datapoints[index + dim] > high_range[dim])
+            {
+                //delete element and exit loop
+                possible_pts.erase(possible_pts.begin()+point);
+                break;//continue;  //or break?
+            }
+        }
+    }
+
+    return possible_pts;
+}
+
+
+
+//*******************************************************************//
+//************cleaned up version of knn
+//*******************************************************************//
+vector<int> iDistance_Global::QueryKNN(double q[], int num)
+{
+    radius_r = settings.r_init;
+    knn_stopFlag = false;
+    knn_K = num;
+    knn_S.clear();
+    knn_S_dists.clear();
+    knn_S_nodes.clear();
+    //variable to mark for partitions checked
+    knn_partition_checked = new int[number_partitions];
+    for(int i=0;i<number_partitions;i++)
+        knn_partition_checked[i] = 0;
+    knn_pfarthest = 0;
+    //array of iterators
+    //must have left/right for each split in each partition
+    knn_left_pointers = new btree_mm::iterator[number_partitions*number_sections];
+    knn_right_pointers = new btree_mm::iterator[number_partitions*number_sections];
+    
+    stx::CountQueryNodes("Start");
+    while(!knn_stopFlag)  //knn_ret.size() < num)//should probably have safety net (suppose num = 4, but only 3 points exist)
+    {
+        //increase radius (this could be a class parameter)
+        radius_r += settings.r_delta;
+        //check cross with each partition
+
+        SearchO(q, radius_r, true);      
+        //cout<<"With radius: " << radius_r << " KNN="<<knn_S.size()<<endl;
+        if(radius_r > constant_c)   //assuming that constant_c is greater than max distance of space
+            knn_stopFlag = true;
+    }
+    
+    delete [] knn_partition_checked;
+    delete [] knn_left_pointers;
+    delete [] knn_right_pointers;
+    //theStats.ind = knn_S;
+    //theStats.knn = true;
+    
+    return knn_S;   
+}
+
+//*******************************************************************//
+//does search with radius r from pt q and returns all results
+//*******************************************************************//
+vector<int> iDistance_Global::QuerySphere(double q[], double rad)
+{
+    knn_K = number_points;
+    knn_stopFlag = false;
+    
+    knn_pfarthest = 0;
+    knn_S.clear();
+    knn_S_dists.clear();
+    knn_S_nodes.clear();
+    radius_r = rad;
+    knn_pfarthest = 0;
+    knn_partition_checked = new int[number_partitions];
+    for(int i=0;i<number_partitions;i++)
+        knn_partition_checked[i] = 0;
+    //array of iterators
+    //must have left/right for each split in each partition
+    knn_left_pointers = new btree_mm::iterator[number_partitions*number_sections];
+    knn_right_pointers = new btree_mm::iterator[number_partitions*number_sections];
+    //NEED TO DECLARE POINTERS LIKE RIGHT/LEFT/CHECKED/ETC
+    //don't need a timer because this is used in range
+    //have a set radius, so no need to loop, increase, etc.
+    stx::CountQueryNodes("Start");
+    SearchO(q, rad, false);
+        
+    delete [] knn_partition_checked;
+    delete [] knn_left_pointers;
+    delete [] knn_right_pointers;
+    return knn_S;
+}
+
+//searches partitions
+void iDistance_Global::SearchO(double q[], double r, bool sort)
+{
+    //pfurthest in code is checking for the farthest neighbor in the answer
+    //set S.  If |S| == #neighbors wanted and pfurthest is < r from q we
+    //have all of our values
+    ///////////////////set stop flag////////////////////////
+    //we can probably take out knn_pfarthest
+    if(knn_S.size() == knn_K && knn_pfarthest < r)
+        knn_stopFlag = true;
+    
+    //variable to store the distance from partition to query pt
+    double distp;
+    //the index value of the query point
+    double q_index;
+    //get splits to search for each partition
+    vector<char> char_eq = GetSplitsEquation(q,r);
+    vector<unsigned int> search_splits = GetSplitsList(char_eq);
+    //check for each partition
+    for(int i=0; i < number_partitions; i++)
+    {   
+        //cout<<"PARTITION: "<<i<<endl;
+        //calc distance from query point to partition i
+        distp = dist(&reference_points[i*number_dimensions],q);
+        //calculate the q_index - can be moved around
+        //filter dist(O_i, q) - querydist(q)="r" <= dist_max_i
+        if(knn_partition_checked[i] != 1) 
+        {
+            //does the query sphere cross the partition
+            if(distp - r <= partition_dist_max[i])
+            {
+                //check the partition
+                knn_partition_checked[i] = 1;
+                
+                //check each subpartition (split)
+                for(int split=0; split < search_splits.size(); split++)
+                {
+                    int splitnum = search_splits[split];
+                    int s_index = i*number_dimension_splits + splitnum;
+                    //get the equation for partition/split
+                    q_index = GetEquation(i, splitnum, distp);
+                    
+                    //if query sphere is inside this partition
+                    if(distp <= partition_section_dist_max[i*number_dimension_splits + search_splits[split]])
+                    {   //could possibly check for null ptr here to avoid going into tree if partition doesn't have that split
+                        //cout<<"Inside Partition "<<i<<endl;
+                        //find query pt and search in/out
+                        btree_mm::iterator lnode = btree.upper_bound(q_index);
+                        btree_mm::iterator rnode;// = btree.lower_bound(q_index);
+                        rnode = lnode;
+                        knn_left_pointers[s_index] = SearchInward(lnode, q_index - r, q, i, splitnum, sort);
+                        knn_right_pointers[s_index] = SearchOutward(rnode--, q_index + r, q, i, splitnum, sort);
+                    }
+                    else //it intersects
+                    {
+                        //cout<<"Intersect Partition "<<i<<endl;
+                        //get the index value(y) of the pt of dist max
+                        btree_mm::iterator dist_max_i = btree.find(datapoint_index[s_index]);
+                        knn_left_pointers[s_index] = SearchInward(dist_max_i, q_index - r, q, i, splitnum, sort);
+                    }
+                }
+            }
+        }
+        else //we've checked it before
+        {
+            //**********is q_index the same here?
+            btree_mm::iterator null_iterator;
+            //check each subpartition (split)
+            for(int split=0; split < search_splits.size(); split++)
+            {
+                int splitnum = search_splits[split];
+                int s_index = i*number_dimension_splits + splitnum;
+                if(knn_left_pointers[s_index] != null_iterator) //can't actually check if it's null
+                {
+                    knn_left_pointers[s_index] = SearchInward(knn_left_pointers[s_index]--, q_index - r, q, i, splitnum, sort);
+                }
+                if(knn_right_pointers[s_index] != null_iterator)
+                {
+                    knn_right_pointers[s_index] = SearchOutward(knn_right_pointers[s_index]++, q_index + r, q, i, splitnum, sort);
+                }
+            }
+        }
+    }
+}
+
+//node is a pointer to the node to start from
+//ivalue is the stopping value
+btree_mm::iterator iDistance_Global::SearchInward(btree_mm::iterator node, double ivalue, double q[], int partition_i, int split, bool sort)
+{ 
+    //variable for distance
+    double distnode=constant_c;
+    double partition_offset = GetEquation(partition_i, split, 0.0);//roundOff(partition_i*constant_c);
+    int past_data = -1;
+    //i think these will be faster
+    double node_key = node.key();
+    int node_data = node.data();
+    //cout<<"--SearchInward--"<<endl;
+    //cout<<"Part_Offset: "<<partition_offset<<" iValue: "<<ivalue<<endl;
+    //cout<<"Init Node Inward: "<<node_data<<" value: "<<node_key<<endl;
+
+    //must get each node of that value  
+    //while not to stopping value and still inside partition
+    
+    while(node_key >= ivalue && node_key >= partition_offset && node_data != past_data)
+    {        
+        distnode = dist(&datapoints[node_data*number_dimensions], q);
+
+        //cout<<"INWARD KEY: "<<node.key()<<" DATA: "<<node.data()<<" DIST: "<<distnode<<endl;
+        AddNeighbor_KEEP(node_data, distnode, sort);
+        past_data = node_data;
+        node--;
+        node_key = node.key();
+        node_data = node.data();
+    }
+    //past partition, set node to null pointer  
+    if(node_key < partition_offset || node_data == past_data) 
+    {
+        btree_mm::iterator node1;
+        return node1;
+    }
+    return node;    //maybe i don't need to ++
+}
+
+btree_mm::iterator iDistance_Global::SearchOutward(btree_mm::iterator node, double ivalue, double q[], int partition_i, int split, bool sort)
+{
+    //variable for distance
+    double distnode=constant_c;
+    double dist_max = GetEquation(partition_i, split, 0.0) + partition_section_dist_max[partition_i*number_dimension_splits + split];//roundOff(partition_i*constant_c + partition_dist_max[partition_i]);
+    int past_data = -1;
+    //i think these will be faster
+    double node_key = node.key();
+    int node_data = node.data();
+    //cout<<"--SearchOutward--"<<endl;
+    //cout<<"Dist_max: "<<dist_max<<" iValue: "<<ivalue<<endl;
+    //cout<<"Init Node Outward: "<<node_key<<endl;
+
+    //must get each node of that value    
+    //while not to stopping value and still inside partition
+    while(node_key <= ivalue && node_key <= dist_max && node_data != past_data)
+    {        
+        distnode = dist(&datapoints[node_data*number_dimensions], q);
+        //cout<<"OUTWARD KEY: "<<node.key()<<" DATA: "<<node.data()<<" DIST: "<<distnode<<endl;
+        AddNeighbor_KEEP(node_data, distnode, sort);
+
+        past_data = node_data;
+        node++;
+        node_key = node.key();
+        node_data = node.data();
+    }
+    //past partition, set node to null pointer  
+    if(node_key > dist_max || node_data == past_data) 
+    {
+        btree_mm::iterator node1;
+        return node1;
+    }
+    return node;    //maybe i don't need to --
+}
+
+
+void iDistance_Global::buildSections()
+{
+    partition_section_dist_max = new double[number_partitions*number_sections];
+    partition_section_dist_max_index = new unsigned int[number_partitions*number_sections];
+}
+
+
+//*******************************************************************//
+//This function takes the list of reference points and uses them to
+//to assign a partition to all of the data points.  Then it calculates
+//the index value and stores it in an array.
+//assuming closest ref point is the partition to stick it in
+//*******************************************************************//
+void iDistance_Global::buildIndexValues()
+{
+    buildSections();
+    //initialize the arrays
+    datapoint_index = new double[number_points];
+    partition_dist_max = new double[number_partitions];
+    partition_dist_max_index = new unsigned int[number_partitions];
+    for (int k=0; k < number_partitions; k++) {
+        partition_dist_max[k] = -1;    // Initialize all elements to zero.
+        partition_dist_max_index[k] = -1;  //Assume all partitions have at least one pt
+        for (int l=0; l < number_sections; l++) {
+            partition_section_dist_max[k*number_sections + l] = -1;    // Initialize all elements to zero.
+            partition_section_dist_max_index[k*number_sections + l] = -1;  //Assume all partitions have at least one pt
+        }
+    }
+    double ref_dist, temp_dist;
+    //for each point
+    for(int i=0 ; i < number_points ; i++)
+    {
+        int current_partition=0;
+        unsigned int current_section=0;
+        //check each partition (baseline from partition 0)
+        //cout<<"OFFSET: "<< i << " Val:" << datapoints[offset]<<endl;
+        ref_dist = dist(&datapoints[i*number_dimensions],&reference_points[0]);
+        //cout<<"REF DIST: "<<ref_dist<<endl;
+        for(int part=1; part < number_partitions; part++)
+        {
+            temp_dist = dist(&datapoints[i*number_dimensions],&reference_points[part*number_dimensions]);
+            //if closer to this partition
+            if(temp_dist < ref_dist)  // or = to?
+            {
+                current_partition = part;
+                ref_dist = temp_dist;
+            }
+        }
+        
+        //now figure out which section it's in
+        //build binary string
+        int dim; //the dimension to split on
+        for(int k=0; k < number_dimension_splits;k++)
+        {
+            dim = dimension_splits[k];
+            if(datapoints[i*number_dimensions + dim] > dimension_split_value[dim])
+            {
+                current_section = current_section << 1;
+                current_section++;
+            }
+            else //<=
+            {
+                current_section = current_section << 1;
+            }
+        }
+        
+        //if in this partition, calculate key index value
+        datapoint_index[i] = GetEquation(current_partition, current_section, ref_dist);
+        //cout<<"DATA INDEX: "<<datapoint_index[i]<<" P: "<<current_partition<<" D: "<<ref_dist<<endl;
+        //also need to update partition dist_max
+        if(ref_dist > partition_dist_max[current_partition])
+        {
+            partition_dist_max[current_partition] = ref_dist;
+            partition_dist_max_index[current_partition] = i;
+        }
+        if(ref_dist > partition_section_dist_max[current_partition*number_sections + current_section])
+        {
+            partition_section_dist_max[current_partition*number_sections + current_section] = ref_dist;
+            partition_section_dist_max_index[current_partition*number_sections + current_section] = i;
+        }
+    }
+}
+
+void iDistance_Global::setSplitPoints(double* splits, int num)
+{
+    number_dimension_splits = num;
+    number_sections = pow(2, number_dimension_splits);
+    //change c
+    constant_c = constant_c*number_sections;
+    dimension_splits = new int[number_dimension_splits];
+    dimension_split_value = new double[number_dimension_splits];
+    
+    for(int i = 0; i < number_dimension_splits; i++)
+	{
+		dimension_splits[i] = splits[i];
+		dimension_split_value[i] = splits[num + i]; 
+	}
+	
+}
+
+void iDistance_Global::resetNodeCount()
+{
+  stx::CountQueryNodes("Start");
+}
+
+int iDistance_Global::getNodeCount()
+{
+  return stx::CountQueryNodes("Get");
+}

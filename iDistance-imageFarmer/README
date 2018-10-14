@@ -1,0 +1,51 @@
+iDistance* - A high dimensional data indexing technique
+
+Copyright (C) 2012  Michael Schuh, Timothy Wylie, Rafal Angryk
+  Data Mining Laboratory at Montana State University 
+  Principle author contact: michael.schuh@cs.montana.edu
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; only version 2
+of the License.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+-----------------------------------------------------------
+Folder contents
+ includes/  : required libraries
+   btree.h    : modified header file for the stx library
+ run/       : main production executable
+   configs/   : set of predefined config files
+   results/   : assumes this folder for program output files
+   readme.txt : contains more detailed run information
+ src/	    : source code
+
+-----------------------------------------------------------
+INSTALL DEPENDENCY
+
+STX B+ Tree 
+https://idlebox.net/2007/stx-btree/
+
+1. Extract the tarball
+   $ tar -xvfz stx-btree-0.8.6.tar.bz2
+
+2. Copy includes/btree.h to stx-btree-0.8.6/include/stx/btree.h
+
+3. Go to top level directory
+   $ cd stx-btree-0.8.6/
+
+4. Standard installation procedure
+   $ ./configure
+   $ make
+   $ sudo make install
+
+-----------------------------------------------------------
+last updated: 2012-06-01

@@ -1,0 +1,47 @@
+
+Simple readme.txt for iDistance indexing program
+------------------------------------
+
+Compile using: make
+
+Must run from within the "run" folder as:
+./iDist {-C "configfile"} {-SS}
+        [-B "datasetfile" | -L "treefile"] 
+	{-QP "qfile" | -QR "qfile" | -QN "qfile" kval}
+
+Which is essentially:
+
+1. An optional config file to load implementation options
+  -C "config file name" : sets the given parameters from file
+
+2. An optional flag for peforming Sequential Search, instead of iDistance.
+  -SS : if present, run queries with sequential search
+
+3. Followed by a required b+tree choice:
+  -B "dataset file name" : builds b+tree from dataset
+  -L "b+tree file name"  : loads b+tree from file
+
+4. Followed by an optional query choice:
+  -QP "point file name"   : runs a point query on given point
+  -QR "range file name"   : runs a range query on given range
+  -QN "point file name" k : runs a kNN query at given point
+
+If the config file is not given, the default parameter options are used. 
+The "-SS" parameter must appear before any query flag. Also note that 
+you can build the tree without executing a query, since this 
+automatically saves the tree to be loaded later.
+
+example:
+./iDist -C "settings.conf" -B "uniform_16_1000.txt"
+./iDist -L "uniform_16_1000.tree" -QP "qpfile.txt"
+./iDist -SS -L "uniform_16_1000.tree" -QP "qpfile.txt"
+
+All program output will be in the high level "results" folder. Different program run options produce different types of output files. All program output (including results) is also appended to a single "status.txt" file. All program run statistics are compactly stored in a CSV "stats.text" file.
+
+Run specific output files:
+1. Tree Build (-B) results : "dataset file name".results
+2. Tree Save (-B) files : "dataset file name".tree, "dataset file name".data
+3. Query results : "query file name".results
+4. If Sequential Search : "query file name"_ss.results
+
+

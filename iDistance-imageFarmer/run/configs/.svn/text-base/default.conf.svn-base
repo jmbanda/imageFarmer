@@ -1,0 +1,60 @@
+; Default Settings configuration file for iDistance
+; note that options use dashes, and values use underscores
+
+; this file provides all options for all parameters,
+; but the actual settings are identical to the internal
+; program default settings.
+
+[algorithm modes]
+
+version = ORIGINAL
+; options: ORIGINAL, EXT0
+
+range = SIMPLE
+; options: SIMPLE, ADV1
+
+knn = KEEP
+; options: KEEP, RESTART
+
+[algorithm parameters]
+
+c-type = CALCULATE
+; options: CALCULATE, MANUAL
+
+r-type = MANUAL
+; options: CALCULATE, MANUAL 
+
+; if MANUAL, specify:
+r-init = 0.01
+r-delta = 0.01
+
+[partition options]
+
+refs-build =  HALF_POINTS
+; options: HALF_POINTS, HALF_POINTS_CENTER, RANDOM, CLUSTER, FROM_FILE
+
+; if FROM_FILE, specify:
+;refs-num = 4
+;refs-file = "filename"
+
+refs-assign = CLOSEST
+; options: CLOSEST, FARTHEST, ASSIGN_FILE
+; FARTHEST is not implemented..
+
+; if ASSIGN_FILE, specify:
+;assigns-file = "filename"
+; where file contains one line (csv format):
+;  the partition number to assign each point to
+
+[extension options]
+
+splits-build = TOP_CENTERS
+; options: TOP_CENTERS, SPLIT_FILE
+
+; if SPLIT_FILE, specify:
+;splits-file = "filename"
+; where file contains two lines (csv format):
+;  dimension indexes to split (0.. N-1)
+;  values in those dimensions to split on
+
+

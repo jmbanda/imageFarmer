@@ -1,0 +1,57 @@
+/*///////////////////////////////////////////////////////////////////////////////
+Project: iDistance
+URL: http://code.google.com/p/idistance
+Authors: Michael Schuh, Melissa Dale, Tim Wylie
+Copyright: Michael Schuh, Melissa Dale, Tim Wylie
+License: GPL 2
+
+File: helper.h
+Description: 
+///////////////////////////////////////////////////////////////////////////////*/
+
+
+#ifndef _HELPER_H_
+#define _HELPER_H_
+
+#include "definitions.h"
+
+const char* stringToUpper(const char* cStr);
+std::string trimToName(std::string str);
+
+inline std::string trimStr(std::string& str);
+
+int stringToEnum(const char* cStr, const char* opts[], int optCount);
+
+void printQueryResults(ostream& out, vector<int>& results, int numNodes, double queryT);
+void printKNNQueryResults(ostream& out, vector<int>& results, vector<double> dists, vector<int> numNodes, double avgDist, double queryT);
+void printKNNQueryResults_RAW(ostream& out, const char* filename, int dims, int points, const char* qtype, vector<double> dists, vector<int> numNodes, vector<int> numCandidates, double queryT, int k);
+void printQueryResults_RAW(ostream& out, const char* filename, int dims, int points, const char* qtype, std::vector<double> qstats);
+
+void printOut(const char* fp, string printStr, bool toConsole);
+
+configOptions readConfigFile(const char* fp);
+
+double* readDataFile(const char* fp, int p, int d);
+
+double** readDataFile2D(const char* fp, int p, int d);
+
+int* getFileInfo(const char* fp);
+
+int readConfigFile(const char* fp, configOptions* settings);
+
+void setConfigOption(const char * key, const char * val, configOptions * settings);
+    
+void outputConfigOptions(configOptions* settings, ostream& out);
+
+double* findMedians(double* data, int p, int d, bool hasID);
+
+void quickStats(vector<int> data, double* stats);
+void quickStats(vector<double> data, double* stats);
+
+
+timeval startTimer();
+double stopTimer(timeval start);
+
+void testMemoryData(int n, int d);
+
+#endif

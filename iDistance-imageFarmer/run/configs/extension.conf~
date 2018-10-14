@@ -1,0 +1,21 @@
+; Settings configuration file for iDistance
+; note that options use dashes, and values use underscores
+
+[algorithm modes]
+version = EXT1
+range = SIMPLE
+knn = KEEP
+
+[algorithm parameters]
+c-type = CAlCULATE
+r-type = MANUAL
+r-init = 0.01
+r-delta = 0.01
+
+[partition options]
+refs-build =  HALF_POINTS
+refs-assign = CLOSEST
+
+[extension options]
+splits-build = SPLIT_FILE
+splits-file = splits.txt

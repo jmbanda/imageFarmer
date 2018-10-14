@@ -1,0 +1,40 @@
+; Default Settings configuration file for iDistance
+; note that options use dashes, and values use underscores
+
+; this file provides all options for all parameters,
+; but the actual settings are identical to the internal
+; program default settings.
+
+[algorithm modes]
+
+version = ORIGINAL
+; options: ORIGINAL, EXT0
+
+range = SIMPLE
+; options: SIMPLE, ADV1
+
+knn = KEEP
+; options: KEEP, RESTART
+
+[algorithm parameters]
+
+c-type = CALCULATE
+; options: CALCULATE, MANUAL
+
+r-type = MANUAL
+; options: CALCULATE, MANUAL 
+
+r-init = 0.01
+r-delta = 0.01
+
+[partition options]
+
+refs-build =  HALF_POINTS
+; options: HALF_POINTS, HALF_POINTS_CENTER, RANDOM, CLUSTER, FROM_FILE
+
+refs-assign = CLOSEST
+; options: CLOSEST, FARTHEST
+
+;refs-num = 4
+;refs-file = "filename"
+

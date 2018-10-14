@@ -1,0 +1,70 @@
+                                                 /*///////////////////////////////////////////////////////////////////////////////
+Project: iDistance
+URL: http://code.google.com/p/idistance
+Authors: Michael Schuh, Melissa Dale, Tim Wylie
+Copyright: Michael Schuh, Melissa Dale, Tim Wylie
+License: GPL 2
+
+File: idistance.h
+Description: The header file declaring the idistance class
+///////////////////////////////////////////////////////////////////////////////*/
+
+#ifndef _IDISTANCE_GLOBAL_H_
+#define _IDISTANCE_GLOBAL_H_
+
+#include "idistance.h"
+
+
+////////////////////////////////////////////////////
+//an extension class implementing an extension of the idistance method
+////////////////////////////////////////////////////
+class iDistance_Global: public iDistance
+{
+public:  
+    iDistance_Global();
+    ~iDistance_Global();
+    //main method calls
+    vector<int> QueryPoint(double q[]);
+    vector<int> QueryRange(double low_range[], double high_range[]);
+    vector<int> QueryKNN(double q[], int num);
+    vector<int> QuerySphere(double q[], double rad);
+     
+private:
+    //knn helper functions
+    void SearchO(double q[], double r, bool sort);
+    btree_mm::iterator SearchInward(btree_mm::iterator node, double ivalue, double q[], int partition_i, int split, bool restrict_num); //left
+    btree_mm::iterator SearchOutward(btree_mm::iterator node, double ivalue, double q[], int partition_i, int split, bool restrict_num); //right
+    double GetEquation(int partition, int split, double dist);
+    vector<char> GetSplitsEquation(double q[], double rad);
+    vector<unsigned int> GetSplitsList(vector<char> char_eqs);
+    
+public:
+    //class helper functions
+    void buildIndexValues();
+    void setDataDependentOptions();
+    void buildSections();
+    void setSplitPoints(double* splits, int num);
+    
+    void resetNodeCount();
+    int getNodeCount();
+    //setting options???????
+private:
+    //the number of dimension splits (thetas)
+    int number_dimension_splits;
+    //Specify the dimension (dimension theta is on)
+    int* dimension_splits;
+    //The value of the split in that dimension (theta value)
+    double* dimension_split_value;
+    //the number of sections//pow(2,number_dimension_splits)
+    int number_sections; //pow(2,number_dimension_splits)
+
+    //the dist max for each section
+    double* partition_section_dist_max;
+    //the index of the dist max for each section
+    unsigned int* partition_section_dist_max_index;
+    //string telling which sections in the partition to search
+    //vector<char> splits_string;
+};
+
+#endif //_IDISTANCE_GLOBAL_H_
+

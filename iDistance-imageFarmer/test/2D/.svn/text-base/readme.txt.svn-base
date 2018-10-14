@@ -1,0 +1,27 @@
+
+This folder contains a configuration file, data file, and query files to test
+the iDistance algorithm in a 2D space-based partitioning environment. This is the
+same as shown in examples in papers, slides, and presentations.
+
+Run as:
+./iDist -C ../test/2D/test.conf -B test/2D/test_2_10.txt {query}
+
+Where {query} is one of the following:
+
+-QP test/test_2_10_qp.txt
+ same as the data file, tests that you find each given point.
+
+-QR test/test_2_10_qr.txt
+ two range queries: 
+   1) 7,8,9 
+   2) 1,4,5,6
+
+-QN test/test_2_10_qn.txt
+ two knn queries:
+   run with k=3 and get 1) 7,8,9
+   run with k=10 and get 2) all the points in order: 3,2,4,1,7,0,5,8,6,9
+
+Optionally you can also run the example script with two different example runs as:
+sh ../test/2D/runScript.sh 
+
+
